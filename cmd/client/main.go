@@ -23,7 +23,7 @@ func main() {
 	gbn, err := clientprotocol.NewSelectiveRepeatProtocolClient(socket)
 
 	if err != nil {
-		panic(fmt.Sprintf("Failed to start GBN protocol client: %v", err))
+		panic(fmt.Sprintf("Failed to start SR protocol client: %v", err))
 	}
 
 	var messages [][]byte
