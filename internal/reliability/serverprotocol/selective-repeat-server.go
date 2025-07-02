@@ -9,19 +9,19 @@ import (
 	"github.com/hannesi/go-back-n/internal/reliability"
 )
 
-type GoBackNProtocolServer struct {
+type SelectiveRepeatProtocolServer struct {
 	Socket    *net.UDPConn
 	lastOkAck uint8
 }
 
-func NewGoBackNProtocolServer(socket *net.UDPConn) GoBackNProtocolServer {
-	return GoBackNProtocolServer{
+func NewSelectiveRepeatProtocolServer(socket *net.UDPConn) SelectiveRepeatProtocolServer {
+	return SelectiveRepeatProtocolServer{
 		Socket:    socket,
 		lastOkAck: config.DefaultConfig.GoBackNMaxSequence,
 	}
 }
 
-func (server GoBackNProtocolServer) Receive(msgChan chan string) error {
+func (server SelectiveRepeatProtocolServer) Receive(msgChan chan string) error {
 	buffer := make([]byte, 1024)
 	n, addr, err := server.Socket.ReadFromUDP(buffer)
 	if err != nil {
@@ -62,7 +62,7 @@ func (server GoBackNProtocolServer) Receive(msgChan chan string) error {
 	return server.Receive(msgChan)
 }
 
-func (server GoBackNProtocolServer) sendAck(dest *net.UDPAddr) {
+func (server SelectiveRepeatProtocolServer) sendAck(dest *net.UDPAddr) {
 	ack := reliability.NewAckPacket("ACK", server.lastOkAck)
 	serializedAck, err := ack.Serialize()
 	if err != nil {
@@ -72,6 +72,6 @@ func (server GoBackNProtocolServer) sendAck(dest *net.UDPAddr) {
 	server.Socket.WriteToUDP(serializedAck, dest)
 }
 
-func (server GoBackNProtocolServer) sendHelloResponse(addr *net.UDPAddr) {
+func (server SelectiveRepeatProtocolServer) sendHelloResponse(addr *net.UDPAddr) {
 	server.Socket.WriteToUDP([]byte(config.DefaultConfig.HelloMessage), addr)
 }

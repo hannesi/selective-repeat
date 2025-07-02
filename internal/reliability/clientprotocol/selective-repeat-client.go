@@ -12,15 +12,15 @@ import (
 	"github.com/hannesi/go-back-n/pkg/utils"
 )
 
-type GoBackNProtocolClient struct {
+type SelectiveRepeatProtocolClient struct {
 	socket    virtualsocket.VirtualSocket
 	sequencer utils.Sequencer
 	// packetQueue could be a struct of its own with methods
 	packetQueue []reliability.ReliableDataTransferPacket
 }
 
-func NewGoBackNProtocolClient(socket virtualsocket.VirtualSocket) (GoBackNProtocolClient, error) {
-	client := GoBackNProtocolClient{
+func NewSelectiveRepeatProtocolClient(socket virtualsocket.VirtualSocket) (SelectiveRepeatProtocolClient, error) {
+	client := SelectiveRepeatProtocolClient{
 		socket:      socket,
 		sequencer:   utils.NewSequencer(config.DefaultConfig.GoBackNMaxSequence),
 		packetQueue: []reliability.ReliableDataTransferPacket{},
@@ -34,13 +34,13 @@ func NewGoBackNProtocolClient(socket virtualsocket.VirtualSocket) (GoBackNProtoc
 	}
 
 	if !gotResponse {
-		return GoBackNProtocolClient{}, reliability.HelloError{}
+		return SelectiveRepeatProtocolClient{}, reliability.HelloError{}
 	}
 
 	return client, nil
 }
 
-func (client GoBackNProtocolClient) sendHello() (bool, error) {
+func (client SelectiveRepeatProtocolClient) sendHello() (bool, error) {
 	// TODO: replace the mystery constant below
 	log.Println("Sending HELLO...")
 	buffer := make([]byte, 5)
@@ -59,7 +59,7 @@ func (client GoBackNProtocolClient) sendHello() (bool, error) {
 	return res == config.DefaultConfig.HelloMessage, err
 }
 
-func (client GoBackNProtocolClient) Send(data [][]byte) error {
+func (client SelectiveRepeatProtocolClient) Send(data [][]byte) error {
 	// form rdt packets from each byte array
 	for _, payload := range data {
 		rdtPacket := reliability.NewReliableDataTransferPacket(client.sequencer.Next(), payload)
@@ -72,7 +72,7 @@ func (client GoBackNProtocolClient) Send(data [][]byte) error {
 	return nil
 }
 
-func (client GoBackNProtocolClient) sendPacketQueue() {
+func (client SelectiveRepeatProtocolClient) sendPacketQueue() {
 	batch := client.makeBatch()
 	ackChan := make(chan uint8)
 	go client.listenForAcks(ackChan)
@@ -96,7 +96,7 @@ func (client GoBackNProtocolClient) sendPacketQueue() {
 	}
 }
 
-func (client GoBackNProtocolClient) listenForAcks(ackChannel chan uint8) {
+func (client SelectiveRepeatProtocolClient) listenForAcks(ackChannel chan uint8) {
 	log.Print("Listening for acks...")
 	var highestAckSeqReceived uint8
 	startTime := time.Now()
@@ -115,7 +115,7 @@ func (client GoBackNProtocolClient) listenForAcks(ackChannel chan uint8) {
 	ackChannel <- highestAckSeqReceived
 }
 
-func (client GoBackNProtocolClient) makeBatch() [][]byte {
+func (client SelectiveRepeatProtocolClient) makeBatch() [][]byte {
 	n := int(math.Min(float64(config.DefaultConfig.GoBackNWindowSize), float64(len(client.packetQueue))))
 	serializedPackets := make([][]byte, n)
 	for i := range n {
@@ -128,7 +128,7 @@ func (client GoBackNProtocolClient) makeBatch() [][]byte {
 	return serializedPackets
 }
 
-func (client GoBackNProtocolClient) sendBatch(batch [][]byte) {
+func (client SelectiveRepeatProtocolClient) sendBatch(batch [][]byte) {
 	log.Printf("%s==== Sending batch ====%s", config.PositiveHighlightColour, config.ResetColour)
 	for _, packet := range batch {
 		client.socket.Send(packet)
