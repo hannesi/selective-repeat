@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/hannesi/go-back-n/internal/config"
+	"github.com/hannesi/selective-repeat/internal/config"
 )
 
 // VirtualSocket wraps an UDP connection and simulates an unreliable network, introducing delay and bit errors before passing it to the actual UDP socket, or dropping the packet.

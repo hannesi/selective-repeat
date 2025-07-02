@@ -6,10 +6,10 @@ import (
 	"slices"
 	"time"
 
-	"github.com/hannesi/go-back-n/internal/config"
-	"github.com/hannesi/go-back-n/internal/reliability"
-	"github.com/hannesi/go-back-n/internal/virtualsocket"
-	"github.com/hannesi/go-back-n/pkg/utils"
+	"github.com/hannesi/selective-repeat/internal/config"
+	"github.com/hannesi/selective-repeat/internal/reliability"
+	"github.com/hannesi/selective-repeat/internal/virtualsocket"
+	"github.com/hannesi/selective-repeat/pkg/utils"
 )
 
 type SelectiveRepeatProtocolClient struct {

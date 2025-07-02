@@ -2,7 +2,7 @@
 
 # uses 1 based indexing
 
-session_name="go-back-n"
+session_name="selective-repeat"
 
 tmux has-session -t $session_name 2>/dev/null
 

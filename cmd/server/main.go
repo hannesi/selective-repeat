@@ -6,8 +6,8 @@ import (
 	"net"
 	"os"
 
-	"github.com/hannesi/go-back-n/internal/config"
-	"github.com/hannesi/go-back-n/internal/reliability/serverprotocol"
+	"github.com/hannesi/selective-repeat/internal/config"
+	"github.com/hannesi/selective-repeat/internal/reliability/serverprotocol"
 )
 
 func main() {

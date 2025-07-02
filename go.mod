@@ -1,3 +1,3 @@
-module github.com/hannesi/go-back-n
+module github.com/hannesi/selective-repeat
 
 go 1.24.3

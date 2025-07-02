@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/hannesi/go-back-n/internal/reliability/clientprotocol"
-	"github.com/hannesi/go-back-n/internal/virtualsocket"
+	"github.com/hannesi/selective-repeat/internal/reliability/clientprotocol"
+	"github.com/hannesi/selective-repeat/internal/virtualsocket"
 )
 
 var predefinedMessages = []string{"Alekhine", "Botvinnik", "Capablanca", "Ding", "Euwe", "Finegold", "Giri", "Houska", "Ivanchuk", "Jaenisch", "Karpov", "Löwenthal", "Muzychuk", "Naroditsky", "Ojanen", "Polugaevsky", "Qin", "Réti", "Shirov", "Tal", "Ushenina", "Vachier-Lagrave", "Williams", "Xie", "Yusupov", "Zaitsev"}

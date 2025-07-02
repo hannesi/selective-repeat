@@ -5,8 +5,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/hannesi/go-back-n/internal/config"
-	"github.com/hannesi/go-back-n/internal/reliability"
+	"github.com/hannesi/selective-repeat/internal/config"
+	"github.com/hannesi/selective-repeat/internal/reliability"
 )
 
 type SelectiveRepeatProtocolServer struct {

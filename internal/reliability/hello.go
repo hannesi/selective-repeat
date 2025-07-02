@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/hannesi/go-back-n/internal/config"
+	"github.com/hannesi/selective-repeat/internal/config"
 )
 
 type HelloError struct {
