@@ -27,7 +27,7 @@ func main() {
 
 	defer socket.Close()
 
-	reliabilityLayer := serverprotocol.NewGoBackNProtocolServer(socket)
+	reliabilityLayer := serverprotocol.NewSelectiveRepeatProtocolServer(socket)
 	msgChan := make(chan string)
 
 	go reliabilityLayer.Receive(msgChan)

@@ -20,7 +20,7 @@ func main() {
 
 	defer socket.Close()
 
-	gbn, err := clientprotocol.NewGoBackNProtocolClient(socket)
+	gbn, err := clientprotocol.NewSelectiveRepeatProtocolClient(socket)
 
 	if err != nil {
 		panic(fmt.Sprintf("Failed to start GBN protocol client: %v", err))
