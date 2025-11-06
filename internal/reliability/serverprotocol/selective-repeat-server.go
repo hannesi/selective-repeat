@@ -2,76 +2,67 @@ package serverprotocol
 
 import (
 	"log"
+	"maps"
 	"net"
-	"time"
 
 	"github.com/hannesi/selective-repeat/internal/config"
 	"github.com/hannesi/selective-repeat/internal/reliability"
 )
 
 type SelectiveRepeatProtocolServer struct {
-	Socket    *net.UDPConn
-	lastOkAck uint8
+	Socket *net.UDPConn
 }
 
 func NewSelectiveRepeatProtocolServer(socket *net.UDPConn) SelectiveRepeatProtocolServer {
 	return SelectiveRepeatProtocolServer{
-		Socket:    socket,
-		lastOkAck: config.DefaultConfig.GoBackNMaxSequence,
+		Socket: socket,
 	}
 }
 
-func (server SelectiveRepeatProtocolServer) Receive(msgChan chan string) error {
+func (server SelectiveRepeatProtocolServer) Receive(msgChan chan []byte) error {
 	buffer := make([]byte, 1024)
-	n, addr, err := server.Socket.ReadFromUDP(buffer)
-	if err != nil {
-		return server.Receive(msgChan)
+	packetBuffer := map[uint8][]byte{}
+	windowBase := uint8(0)
+	for {
+		n, addr, err := server.Socket.ReadFromUDP(buffer)
+		if err != nil {
+			continue
+		}
+
+		packet, err := reliability.DeserializeReliableDataTransferPacket(buffer[:n])
+
+		switch packet.IsChecksumValid() {
+		case true:
+			server.sendAck(addr, packet.Sequence)
+			if packet.Sequence == windowBase {
+				msgChan <- packet.Payload
+				// check packetBuffer for subsequent packets
+				windowBase++
+				for {
+					message, exists := packetBuffer[windowBase]
+					if !exists {
+						break
+					}
+					msgChan <- message
+					delete(packetBuffer, windowBase)
+					windowBase++
+				}
+			} else {
+				// if out of order, add to buffer
+				packetBuffer[packet.Sequence] = packet.Payload
+			}
+		case false:
+			log.Println("Reliability layer: Bit error detected!")
+		}
 	}
-
-	if reliability.IsHelloMessage(buffer[:n]) {
-		// reset sequencer on HELLO
-		server.lastOkAck = config.DefaultConfig.GoBackNMaxSequence
-		log.Println("Received HELLO message, answering HELLO")
-		server.sendHelloResponse(addr)
-		return server.Receive(msgChan)
-	}
-
-	packet, err := reliability.DeserializeReliableDataTransferPacket(buffer[:n])
-	time.Sleep(config.DefaultConfig.ServerPacketHandleTime)
-
-	if !packet.IsChecksumValid() {
-		log.Println("Bit error detected!")
-		server.sendAck(addr)
-		return server.Receive(msgChan)
-	}
-
-	if packet.Sequence != server.lastOkAck+1 {
-		log.Printf("Unexpected sequence number! Expected %s%d%s, received %s%d%s",
-			config.NegativeHighlightColour, server.lastOkAck+1, config.ResetColour,
-			config.NegativeHighlightColour, packet.Sequence, config.ResetColour)
-		server.sendAck(addr)
-		return server.Receive(msgChan)
-	}
-
-	// if packet is ok
-	server.lastOkAck = packet.Sequence
-	server.sendAck(addr)
-
-	msgChan <- string(packet.Payload)
-
-	return server.Receive(msgChan)
 }
 
-func (server SelectiveRepeatProtocolServer) sendAck(dest *net.UDPAddr) {
-	ack := reliability.NewAckPacket("ACK", server.lastOkAck)
+func (server SelectiveRepeatProtocolServer) sendAck(dest *net.UDPAddr, seq uint8) {
+	ack := reliability.NewAckPacket("ACK", seq)
 	serializedAck, err := ack.Serialize()
 	if err != nil {
 		log.Println("Server failed to serialize an ack packet. Trying again.")
-		server.sendAck(dest)
+		server.sendAck(dest, seq)
 	}
 	server.Socket.WriteToUDP(serializedAck, dest)
-}
-
-func (server SelectiveRepeatProtocolServer) sendHelloResponse(addr *net.UDPAddr) {
-	server.Socket.WriteToUDP([]byte(config.DefaultConfig.HelloMessage), addr)
 }
