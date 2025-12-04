@@ -20,7 +20,7 @@ func main() {
 
 	defer socket.Close()
 
-	gbn, err := clientprotocol.NewSelectiveRepeatProtocolClient(socket)
+	sr, err := clientprotocol.NewSelectiveRepeatProtocolClient(socket)
 
 	if err != nil {
 		panic(fmt.Sprintf("Failed to start SR protocol client: %v", err))
@@ -31,6 +31,6 @@ func main() {
 		messages = append(messages, []byte(msg))
 	}
 
-	gbn.Send(messages)
+	sr.Send(messages)
 }
 

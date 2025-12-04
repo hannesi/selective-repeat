@@ -1,104 +1,121 @@
 package clientprotocol
 
 import (
-	"log"
-	"math"
+	"context"
+	"fmt"
 	"slices"
 	"time"
 
 	"github.com/hannesi/selective-repeat/internal/config"
 	"github.com/hannesi/selective-repeat/internal/reliability"
 	"github.com/hannesi/selective-repeat/internal/virtualsocket"
-	"github.com/hannesi/selective-repeat/pkg/utils"
 )
 
 type SelectiveRepeatProtocolClient struct {
-	socket    virtualsocket.VirtualSocket
-	sequencer utils.Sequencer
-	// packetQueue could be a struct of its own with methods
-	packetQueue []reliability.ReliableDataTransferPacket
+	socket virtualsocket.VirtualSocket
+}
+
+type SelectiveRepeatPacket struct {
+	SerializedRDTPacket []byte
+	LatestSendTime      time.Time
+	Acked               bool
 }
 
 func NewSelectiveRepeatProtocolClient(socket virtualsocket.VirtualSocket) (SelectiveRepeatProtocolClient, error) {
 	client := SelectiveRepeatProtocolClient{
-		socket:      socket,
-		sequencer:   utils.NewSequencer(uint8(config.DefaultConfig.SelectiveRepeatWindowSize - 1)),
-		packetQueue: []reliability.ReliableDataTransferPacket{},
+		socket: socket,
 	}
 
 	return client, nil
 }
 
 func (client SelectiveRepeatProtocolClient) Send(data [][]byte) error {
-	for _, payload := range data {
-		rdtPacket := reliability.NewReliableDataTransferPacket(client.sequencer.Next(), payload)
-		client.packetQueue = append(client.packetQueue, rdtPacket)
+	packets := []SelectiveRepeatPacket{}
+	for i, payload := range data {
+		serializedRdtPacket, err := reliability.NewReliableDataTransferPacket(uint8(i), payload).Serialize()
+		if err != nil {
+			fmt.Println(err)
+		}
+		srPacket := SelectiveRepeatPacket{SerializedRDTPacket: serializedRdtPacket}
+		packets = append(packets, srPacket)
 	}
 
-	client.sendPacketQueue()
+	// start ack listening thread
+	ctx, killListenForAcks := context.WithCancel(context.Background())
+	ackChannel := make(chan int)
+	go client.ListenForAcks(ackChannel, ctx)
 
+	windowBase := 0
+	ackBuffer := []int{}
+
+	for windowBase < len(packets) {
+		// handle received acks
+	AckChannelLoop:
+		for {
+			select {
+			case seq := <-ackChannel:
+				fmt.Printf("Handled ack %d\n", seq)
+				packets[seq].Acked = true
+				if seq == windowBase {
+					windowBase = seq + 1
+				AckBufferLoop:
+					for {
+						idx := slices.Index(ackBuffer, windowBase)
+						switch idx {
+						case -1:
+							break AckBufferLoop
+						default:
+							windowBase++
+							ackBuffer = slices.Delete(ackBuffer, idx, idx+1)
+						}
+					}
+				} else {
+					ackBuffer = append(ackBuffer, seq)
+				}
+			default:
+				break AckChannelLoop
+			}
+		}
+		fmt.Printf("Window Base: %d, Buffered acks: %v\n", windowBase, ackBuffer)
+
+		// send batch of packets
+		for i := windowBase; i < windowBase+config.DefaultConfig.SelectiveRepeatWindowSize; i++ {
+			if i < len(packets) && !packets[i].Acked && time.Since(packets[i].LatestSendTime) > config.DefaultConfig.SelectiveRepeatPacketResendWaitTime {
+				client.socket.Send(packets[i].SerializedRDTPacket)
+				packets[i].LatestSendTime = time.Now()
+				fmt.Printf("Sending packet %d\n", i)
+			}
+		}
+
+		time.Sleep(config.DefaultConfig.SelectiveRepeatSendLoopInterval)
+	}
+
+	killListenForAcks()
 	return nil
 }
 
-func (client SelectiveRepeatProtocolClient) sendPacketQueue() {
-	batch := client.makeBatch()
-	ackChan := make(chan []uint8)
-	go client.listenForAcks(ackChan)
-	client.sendBatch(batch)
-	receivedAcks := <-ackChan
+func (client SelectiveRepeatProtocolClient) ListenForAcks(ackChannel chan int, ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			buffer := make([]byte, 4)
+			_, err := client.socket.Receive(buffer)
+			if err != nil {
+				fmt.Println(err)
+				break
+			}
 
-	// Remove packets up to and including the one with highest seq acked
-	// The searched index is expected to be near the beginning of the slice, so the chosen method is fine.
-	highestAckedIdx := slices.IndexFunc(client.packetQueue, func(p reliability.ReliableDataTransferPacket) bool {
-		return p.Sequence == highestAckSeqReceived
-	})
+			ackPacket, err := reliability.DeserializeAckBytes(buffer)
+			if err != nil {
+				fmt.Println(err)
+				break
+			}
 
-	if highestAckedIdx != -1 {
-		client.packetQueue = slices.Delete(client.packetQueue, 0, highestAckedIdx+1)
-	}
+			// fmt.Printf("Received ack: %v\n", ackPacket)
 
-	if len(client.packetQueue) != 0 {
-		client.sendPacketQueue()
-	} else {
-		log.Println("All packets sent! Shutting down...")
-	}
-}
-
-func (client SelectiveRepeatProtocolClient) listenForAcks(ackChannel chan []uint8) {
-	log.Print("Listening for acks...")
-	var highestAckSeqReceived uint8
-	startTime := time.Now()
-	for time.Now().Sub(startTime) < config.DefaultConfig.ReliabilityLayerAckWaitTime {
-		buffer := make([]byte, 4)
-		_, err := client.socket.Receive(buffer)
-		if err != nil {
-			continue
+			ackChannel <- int(ackPacket.Sequence)
 		}
-		ack, err := reliability.DeserializeAckBytes(buffer)
-		if err != nil {
-			continue
-		}
-		highestAckSeqReceived = ack.Sequence
-	}
-	ackChannel <- highestAckSeqReceived
-}
-
-func (client SelectiveRepeatProtocolClient) makeBatch() [][]byte {
-	n := int(math.Min(float64(config.DefaultConfig.SelectiveRepeatWindowSize), float64(len(client.packetQueue))))
-	serializedPackets := make([][]byte, n)
-	for i := range n {
-		data, err := client.packetQueue[i].Serialize()
-		if err != nil {
-			log.Printf("%v", err)
-		}
-		serializedPackets[i] = data
-	}
-	return serializedPackets
-}
-
-func (client SelectiveRepeatProtocolClient) sendBatch(batch [][]byte) {
-	log.Printf("%s==== Sending batch ====%s", config.PositiveHighlightColour, config.ResetColour)
-	for _, packet := range batch {
-		client.socket.Send(packet)
 	}
 }

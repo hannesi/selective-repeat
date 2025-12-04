@@ -27,14 +27,14 @@ func main() {
 
 	defer socket.Close()
 
-	reliabilityLayer := serverprotocol.NewSelectiveRepeatProtocolServer(socket)
-	msgChan := make(chan string)
+	msgChan := make(chan []byte)
+	reliabilityLayer := serverprotocol.NewSelectiveRepeatProtocolServer(socket, msgChan)
 
-	go reliabilityLayer.Receive(msgChan)
+	go reliabilityLayer.Receive()
 
 	for {
 		msg := <-msgChan
-		log.Printf("Received message: %s%s%s", config.PositiveHighlightColour, msg, config.ResetColour)
+		log.Printf("Received message: %s%s%s", config.PositiveHighlightColour, string(msg), config.ResetColour)
 	}
 
 }
