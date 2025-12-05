@@ -49,6 +49,7 @@ func (client SelectiveRepeatProtocolClient) Send(data [][]byte) error {
 	ackBuffer := []int{}
 
 	for windowBase < len(packets) {
+		fmt.Printf("%sStart of loop%s\n", config.NegativeHighlightColour, config.ResetColour)
 		// handle received acks
 	AckChannelLoop:
 		for {
@@ -69,7 +70,7 @@ func (client SelectiveRepeatProtocolClient) Send(data [][]byte) error {
 							ackBuffer = slices.Delete(ackBuffer, idx, idx+1)
 						}
 					}
-				} else {
+				} else if seq > windowBase {
 					ackBuffer = append(ackBuffer, seq)
 				}
 			default:
@@ -103,7 +104,7 @@ func (client SelectiveRepeatProtocolClient) ListenForAcks(ackChannel chan int, c
 			buffer := make([]byte, 4)
 			_, err := client.socket.Receive(buffer)
 			if err != nil {
-				fmt.Println(err)
+				// fmt.Println(err)
 				break
 			}
 
